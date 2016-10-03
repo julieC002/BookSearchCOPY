@@ -1,9 +1,11 @@
 package com.example.android.booksearch;
 
 import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.AsyncTask;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
@@ -48,14 +50,34 @@ public class MainActivity extends AppCompatActivity {
     private TextView emptyText;
 
 
+    /**
+     * Save the value of the bookArrayList variable
+     */
+    public void onSaveInstanceState(Bundle savedState) {
+        super.onSaveInstanceState(savedState);
+        // Save the value of bookArrayList variable
+        savedState.putSerializable("myKey", bookArrayList);
+
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        // Set click listener on Search button
+        final Button search = (Button) findViewById(R.id.search_button);
+        search.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                search();
+            }
+        });
+
         // Find the EditText, TextView, and Button
         searchButton = (Button) findViewById(R.id.search_button);
         emptyText = (TextView) findViewById(R.id.no_data_msg);
+        searchText = (EditText) findViewById(R.id.search_field);
 
         // Find the ListView
         listView = (ListView) findViewById(R.id.list);
@@ -63,33 +85,54 @@ public class MainActivity extends AppCompatActivity {
         adapter = new BookAdapter(this, bookArrayList);
         listView.setAdapter(adapter);
 
-        // Set click listener on EditText field
-        searchButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                adapter.clear();
-                searchText = (EditText) findViewById(R.id.search_field);
-                String userInput = searchText.getText().toString().replace(" ", "+");
-                if (userInput.isEmpty()) {
-                    Context context = getApplicationContext();
-                    CharSequence text = "You did not enter anything";
-                    int duration = Toast.LENGTH_SHORT;
+        // Check if savedInstanceState contains saved data
+        if (savedInstanceState != null) {
+            // Restore saved values
+            ArrayList<Book> results = (ArrayList<Book>) savedInstanceState.getSerializable("myKey");
+            adapter.addAll(results);
+            adapter.notifyDataSetChanged();
+        }
 
-                    Toast toast = Toast.makeText(context, text, duration);
-                    toast.show();
-                }
-                // Kick off an {@link AsyncTask} to perform the network request
-                BookAsyncTask task = new BookAsyncTask();
-                task.execute(userInput);
-            }
-        });
     }
+    // Check for internet connectivity and if there is, run the task; if not, pop up toast
+    private void search(){
+        if (isNetworkAvailable(this)){
+            // Fetch task
+            adapter.clear();
+            String userInput = searchText.getText().toString().replace(" ", "+");
+            if (userInput.isEmpty()) {
+                Context context = getApplicationContext();
+                CharSequence text = "You did not enter anything";
+                int duration = Toast.LENGTH_SHORT;
+
+                Toast toast = Toast.makeText(context, text, duration);
+                toast.show();
+                return;
+            }
+            // Kick off an {@link AsyncTask} to perform the network request
+            BookAsyncTask task = new BookAsyncTask();
+            task.execute(userInput);
+        }else{
+            Toast.makeText(MainActivity.this, "No internet connectivity.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * Returns true if network is available or about to become available
+     */
+    public static boolean isNetworkAvailable(Context context) {
+        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
+        return activeNetwork != null && activeNetwork.isConnectedOrConnecting();
+    }
+
     // Update the screen to display the information for the given {@link Book}
     private void updateUi(List<Book> book) {
         if (book.isEmpty()) {
+            emptyText.setVisibility(View.VISIBLE);
             emptyText.setText("No results available. Try another search.");
         } else {
-            emptyText.setText("");
+            emptyText.setVisibility(View.GONE);
             adapter.addAll(book);
             adapter.notifyDataSetChanged();
         }
